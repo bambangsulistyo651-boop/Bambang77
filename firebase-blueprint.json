@@ -1,0 +1,20 @@
+{
+  "collections": {
+    "pengajuan": {
+      "rules": "allow read, write: if true;",
+      "schema": {
+        "title": "string",
+        "desc": "string",
+        "alasan": "string",
+        "date": "string",
+        "mesin": "string",
+        "bagian": "string",
+        "qty": "number",
+        "unit": "string",
+        "prioritas": "string",
+        "statusLabels": "array",
+        "riwayat": "array"
+      }
+    }
+  }
+}
