@@ -1,0 +1,23 @@
+{
+  "short_name": "Pengajuan",
+  "name": "Pengajuan Barang",
+  "icons": [
+    {
+      "src": "/icon-192x192.png?v=4",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png?v=4",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "theme_color": "#3b63f6",
+  "orientation": "portrait"
+}
