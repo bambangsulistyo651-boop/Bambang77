@@ -87,6 +87,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setPengajuanList([]);
       }
+    }, (error) => {
+      console.error("Firestore onSnapshot error:", error);
     });
 
     return () => unsubscribe();
