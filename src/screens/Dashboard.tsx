@@ -1,54 +1,132 @@
-import React, { useMemo } from 'react';
-import { Bell, Search, Package, Clock, Users, PackageOpen, TrendingUp, ChevronRight, BarChart2, ChevronDown } from 'lucide-react';
+import React, { useMemo, useState, useRef } from 'react';
+import { Bell, Search, Package, Clock, Users, PackageOpen, TrendingUp, ChevronRight, ChevronLeft, BarChart2, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, Cell, XAxis, ResponsiveContainer, LabelList } from 'recharts';
 import { useAppContext } from '../store';
 import { cn } from '../utils';
 
 export default function Dashboard() {
   const { pengajuanList, navigate } = useAppContext();
-  
+  const [selectedYear, setSelectedYear] = useState<string>('2026');
+  const [showYearDropdown, setShowYearDropdown] = useState<boolean>(false);
+  const chartScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollChart = (direction: 'left' | 'right') => {
+    if (chartScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -220 : 220;
+      chartScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    years.add('2026');
+    pengajuanList.forEach(item => {
+      if (item.createdAt) {
+        const y = new Date(item.createdAt).getFullYear();
+        if (!isNaN(y) && y > 2000) years.add(y.toString());
+      }
+      const match = item.date?.match(/\b(202\d)\b/);
+      if (match) {
+        years.add(match[1]);
+      }
+    });
+    return Array.from(years).sort().reverse();
+  }, [pengajuanList]);
+
   const stats = useMemo(() => {
     let diproses = 0;
     let selesai = 0;
     let urgent = 0;
+    let total = 0;
 
     pengajuanList.forEach(item => {
+      if (selectedYear && selectedYear !== 'Semua') {
+        let itemYear: string | null = null;
+        if (item.createdAt) {
+          const d = new Date(item.createdAt);
+          if (!isNaN(d.getTime())) itemYear = d.getFullYear().toString();
+        }
+        if (!itemYear && item.date) {
+          const match = item.date.match(/\b(202\d)\b/);
+          if (match) itemYear = match[1];
+        }
+        if (itemYear && itemYear !== selectedYear) return;
+      }
+
+      total++;
       if (item.statusLabels.includes('DIPROSES')) diproses++;
       if (item.statusLabels.includes('SELESAI')) selesai++;
       if (item.prioritas === 'Urgent' || item.statusLabels.includes('URGENT')) urgent++;
     });
 
     return {
-      total: pengajuanList.length,
+      total,
       diproses,
       selesai,
       urgent
     };
-  }, [pengajuanList]);
+  }, [pengajuanList, selectedYear]);
 
   const dynamicChartData = useMemo(() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul']; // Limiting to Jul like in the image for exact visual match
-    const data = months.map(name => ({ name, value: 0 }));
+    // 12 bulan lengkap dari Januari sampai Desember
+    const monthConfigs = [
+      { name: 'Jan', aliases: ['jan', '-01-', '/01/', '.01.', '01-'] },
+      { name: 'Feb', aliases: ['feb', '-02-', '/02/', '.02.', '02-'] },
+      { name: 'Mar', aliases: ['mar', '-03-', '/03/', '.03.', '03-'] },
+      { name: 'Apr', aliases: ['apr', '-04-', '/04/', '.04.', '04-'] },
+      { name: 'Mei', aliases: ['mei', 'may', '-05-', '/05/', '.05.', '05-'] },
+      { name: 'Jun', aliases: ['jun', '-06-', '/06/', '.06.', '06-'] },
+      { name: 'Jul', aliases: ['jul', '-07-', '/07/', '.07.', '07-'] },
+      { name: 'Agu', aliases: ['agu', 'agt', 'aug', '-08-', '/08/', '.08.', '08-'] },
+      { name: 'Sep', aliases: ['sep', '-09-', '/09/', '.09.', '09-'] },
+      { name: 'Okt', aliases: ['okt', 'oct', '-10-', '/10/', '.10.', '10-'] },
+      { name: 'Nov', aliases: ['nov', '-11-', '/11/', '.11.', '11-'] },
+      { name: 'Des', aliases: ['des', 'dec', '-12-', '/12/', '.12.', '12-'] },
+    ];
+
+    const data = monthConfigs.map(m => ({ name: m.name, value: 0 }));
 
     pengajuanList.forEach(item => {
-      let monthIndex = -1;
-      const dateStr = item.date.toLowerCase();
-      
-      if (dateStr.includes('jan') || dateStr.includes('-01-')) monthIndex = 0;
-      else if (dateStr.includes('feb') || dateStr.includes('-02-')) monthIndex = 1;
-      else if (dateStr.includes('mar') || dateStr.includes('-03-')) monthIndex = 2;
-      else if (dateStr.includes('apr') || dateStr.includes('-04-')) monthIndex = 3;
-      else if (dateStr.includes('mei') || dateStr.includes('may') || dateStr.includes('-05-')) monthIndex = 4;
-      else if (dateStr.includes('jun') || dateStr.includes('-06-')) monthIndex = 5;
-      else if (dateStr.includes('jul') || dateStr.includes('-07-')) monthIndex = 6;
+      // Filter berdasarkan tahun terpilih
+      if (selectedYear && selectedYear !== 'Semua') {
+        let itemYear: string | null = null;
+        if (item.createdAt) {
+          const d = new Date(item.createdAt);
+          if (!isNaN(d.getTime())) itemYear = d.getFullYear().toString();
+        }
+        if (!itemYear && item.date) {
+          const match = item.date.match(/\b(202\d)\b/);
+          if (match) itemYear = match[1];
+        }
+        if (itemYear && itemYear !== selectedYear) return;
+      }
 
-      if (monthIndex !== -1) {
+      let monthIndex = -1;
+      const dateStr = (item.date || '').toLowerCase();
+
+      for (let i = 0; i < monthConfigs.length; i++) {
+        if (monthConfigs[i].aliases.some(alias => dateStr.includes(alias))) {
+          monthIndex = i;
+          break;
+        }
+      }
+
+      // Fallback ke createdAt jika belum terdeteksi dari string tanggal
+      if (monthIndex === -1 && item.createdAt) {
+        const d = new Date(item.createdAt);
+        if (!isNaN(d.getTime())) {
+          monthIndex = d.getMonth();
+        }
+      }
+
+      if (monthIndex >= 0 && monthIndex < 12) {
         data[monthIndex].value += 1;
       }
     });
 
     return data;
-  }, [pengajuanList]);
+  }, [pengajuanList, selectedYear]);
+
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 bg-[#f8fafc] font-sans">
@@ -81,10 +159,15 @@ export default function Dashboard() {
       <div className="px-5 relative z-20 -mt-2">
         {/* Filter */}
         <div className="flex justify-between items-center py-2 px-1 mb-2">
-          <button className="flex items-center space-x-1 text-sm font-semibold text-gray-800">
-            <span>Tahun 2026</span>
-            <ChevronDown size={16} className="text-gray-500" />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setShowYearDropdown(prev => !prev)}
+              className="flex items-center space-x-1.5 text-sm font-semibold text-gray-800 bg-white/70 hover:bg-white px-3 py-1.5 rounded-xl border border-gray-100 shadow-2xs transition-all"
+            >
+              <span>{selectedYear === 'Semua' ? 'Semua Tahun' : `Tahun ${selectedYear}`}</span>
+              <ChevronDown size={16} className={cn("text-gray-500 transition-transform duration-200", showYearDropdown && "rotate-180")} />
+            </button>
+          </div>
         </div>
 
         {/* Hero Card */}
@@ -156,35 +239,133 @@ export default function Dashboard() {
         </div>
 
         {/* Chart */}
-        <div className="bg-white border border-gray-100 rounded-[1.5rem] p-5 shadow-sm mb-6">
-          <div className="flex justify-between items-center mb-6">
-             <h2 className="text-[15px] font-bold text-gray-900">Pengajuan per Bulan</h2>
-             <button className="flex items-center space-x-1 text-xs font-semibold text-gray-500 bg-gray-50 px-2.5 py-1 rounded-lg">
-                <span>Tahun 2026</span>
-                <ChevronDown size={14} />
-             </button>
+        <div className="bg-white border border-gray-100 rounded-[1.5rem] p-5 shadow-sm mb-6 relative">
+          <div className="flex justify-between items-center mb-3">
+             <div>
+               <h2 className="text-[15px] font-bold text-gray-900 leading-tight">Pengajuan per Bulan</h2>
+               <p className="text-[11px] text-gray-400 font-medium">Januari – Desember</p>
+             </div>
+             
+             <div className="flex items-center space-x-2">
+               {/* Tombol Geser Kiri / Kanan */}
+               <div className="flex items-center space-x-1 bg-gray-50 border border-gray-100 rounded-lg p-0.5">
+                 <button 
+                   onClick={() => scrollChart('left')}
+                   className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-white active:scale-95 transition-all"
+                   aria-label="Geser ke kiri"
+                   title="Geser ke kiri"
+                 >
+                   <ChevronLeft size={15} />
+                 </button>
+                 <div className="w-[1px] h-3 bg-gray-200"></div>
+                 <button 
+                   onClick={() => scrollChart('right')}
+                   className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-white active:scale-95 transition-all"
+                   aria-label="Geser ke kanan"
+                   title="Geser ke kanan"
+                 >
+                   <ChevronRight size={15} />
+                 </button>
+               </div>
+
+               {/* Dropdown Pilihan Tahun */}
+               <div className="relative">
+                 <button 
+                   onClick={() => setShowYearDropdown(prev => !prev)}
+                   className="flex items-center space-x-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 px-2.5 py-1.5 rounded-lg border border-gray-100 transition-colors"
+                 >
+                    <span>{selectedYear === 'Semua' ? 'Semua Tahun' : `Tahun ${selectedYear}`}</span>
+                    <ChevronDown size={14} className={cn("text-gray-400 transition-transform duration-200", showYearDropdown && "rotate-180")} />
+                 </button>
+                 
+                 {showYearDropdown && (
+                   <>
+                     <div 
+                       className="fixed inset-0 z-30" 
+                       onClick={() => setShowYearDropdown(false)}
+                     />
+                     <div className="absolute right-0 mt-1.5 w-32 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-40 text-xs animate-in fade-in zoom-in-95">
+                       {availableYears.map(year => (
+                         <button
+                           key={year}
+                           onClick={() => {
+                             setSelectedYear(year);
+                             setShowYearDropdown(false);
+                           }}
+                           className={cn(
+                             "w-full text-left px-3 py-2 font-medium hover:bg-blue-50 transition-colors flex items-center justify-between",
+                             selectedYear === year ? "text-blue-600 font-bold bg-blue-50/50" : "text-gray-700"
+                           )}
+                         >
+                           <span>Tahun {year}</span>
+                           {selectedYear === year && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
+                         </button>
+                       ))}
+                       <button
+                         onClick={() => {
+                           setSelectedYear('Semua');
+                           setShowYearDropdown(false);
+                         }}
+                         className={cn(
+                           "w-full text-left px-3 py-2 font-medium border-t border-gray-50 hover:bg-blue-50 transition-colors flex items-center justify-between",
+                           selectedYear === 'Semua' ? "text-blue-600 font-bold bg-blue-50/50" : "text-gray-700"
+                         )}
+                       >
+                         <span>Semua Tahun</span>
+                         {selectedYear === 'Semua' && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
+                       </button>
+                     </div>
+                   </>
+                 )}
+               </div>
+             </div>
           </div>
-          <div className="h-40 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dynamicChartData} margin={{ top: 15, right: 0, left: -25, bottom: 0 }}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#6B7280', fontWeight: 500}} dy={10} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={16}>
-                  <LabelList 
-                    dataKey="value" 
-                    position="top" 
-                    fill="#111827"
-                    fontSize={11}
-                    fontWeight={700}
-                    formatter={(val: number) => val > 0 ? val : ''}
+
+          {/* Hint Swipe / Geser */}
+          <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2 px-0.5">
+            <span className="flex items-center gap-1.5 font-medium text-gray-500">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+              Geser ke kiri / kanan untuk melihat bulan lainnya
+            </span>
+            <span className="text-[10px] bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">
+              12 Bulan (Jan - Des)
+            </span>
+          </div>
+
+          {/* Scrollable Container dengan Touch Swipe */}
+          <div 
+            ref={chartScrollRef} 
+            className="overflow-x-auto pb-2 custom-scrollbar touch-pan-x select-none -mx-1 px-1 scroll-smooth"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            <div className="h-44 min-w-[660px] pr-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dynamicChartData} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fontSize: 11, fill: '#6B7280', fontWeight: 600}} 
+                    dy={10} 
                   />
-                  {
-                    dynamicChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill="#3b82f6" />
-                    ))
-                  }
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={18}>
+                    <LabelList 
+                      dataKey="value" 
+                      position="top" 
+                      fill="#111827"
+                      fontSize={11}
+                      fontWeight={700}
+                      formatter={(val: number) => val > 0 ? val : ''}
+                    />
+                    {
+                      dynamicChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill="#3b82f6" />
+                      ))
+                    }
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
